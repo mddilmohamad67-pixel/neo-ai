@@ -1,0 +1,23 @@
+# backend
+backend/.env
+backend/.neo_token
+backend/.venv/
+backend/logs/
+__pycache__/
+*.pyc
+
+# android
+android/.gradle/
+android/local.properties
+android/build/
+android/app/build/
+android/.idea/
+*.iml
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# misc
+.DS_Store
+*.log

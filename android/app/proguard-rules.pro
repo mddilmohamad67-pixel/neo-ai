@@ -1,0 +1,2 @@
+-dontwarn okhttp3.**
+-keepclassmembers class com.neoai.** { @android.webkit.JavascriptInterface <methods>; }

@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">NEO AI</string>
+    <string name="accessibility_label">NEO AI Assistant</string>
+    <string name="accessibility_description">NEO uses Accessibility only when you turn automation ON. It lets you ask NEO to tap buttons, type text, scroll, or navigate inside apps you are already using. You can stop it any time. NEO never grants permissions for you and never hides its activity.</string>
+    <string name="notif_channel_name">NEO background</string>
+    <string name="notif_listening">NEO is listening</string>
+    <string name="notif_automation">NEO automation is active</string>
+</resources>
