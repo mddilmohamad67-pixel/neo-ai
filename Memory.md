@@ -59,3 +59,8 @@
 - Android: on-device quick parse for WhatsApp/SMS/call (instant confirm), spoken "haan/nahi" confirmation, hands-free auto-listen after every reply, WhatsApp auto-send via Accessibility (`com.whatsapp:id/send` poll), WebView loader prefers downloaded `filesDir/web`, verifies manifest hashes, falls back to APK assets.
 - Rebuilt debug APK with all native changes; API/README/LIMITATIONS/SETUP updated.
 - Next: user installs this build once; future HTML/CSS/JS changes ship through `/app/manifest` (no reinstall). Rotate both chat-pasted keys.
+
+## 2026-10-23 — backend stays online
+- User reported app "offline": the backend had been stopped after testing.
+- Added `backend/start.sh`, `daemon.py` (double-fork) and `serve_forever.sh` (wake-lock + auto-restart), plus `~/.termux/boot/neo-backend.sh` for Termux:Boot.
+- Backend now verified online with Gemini (`/health/full` model gemini-3.5-flash, live chat reply). Termux:Boot app is not installed yet.
