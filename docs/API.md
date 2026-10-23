@@ -118,3 +118,23 @@ by default — it uses on-device `SpeechRecognizer` for privacy and latency.
 ```
 
 `401` bad token · `422` validation · `429` rate limit · `5xx` provider failure.
+
+
+## WebUI hot update
+
+Both require the usual bearer token.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/app/manifest` | `{version, files:{name:{sha256,size}}}` for every UI asset |
+| GET | `/app/file/{name}` | Raw asset (`app.js`, `style.css`, ...) |
+
+Publish after editing the WebView assets:
+
+```bash
+./scripts/sync_webui.sh      # android assets -> backend/webui
+```
+
+The app checks the manifest on launch, downloads changed files into
+`filesDir/web`, verifies each SHA-256, swaps the folder and reloads. If anything
+fails it keeps the previous copy (or the assets bundled in the APK).

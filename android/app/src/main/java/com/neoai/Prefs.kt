@@ -65,4 +65,9 @@ class Prefs(context: Context) {
     var displayName: String
         get() = prefs.getString("name", "Rehan") ?: "Rehan"
         set(value) = prefs.edit().putString("name", value).apply()
+
+    /** Version of the downloaded WebView UI (empty = still using APK assets). */
+    var uiVersion: String
+        get() = prefs.getString("ui_version", "") ?: ""
+        set(value) = prefs.edit().putString("ui_version", value).apply()
 }

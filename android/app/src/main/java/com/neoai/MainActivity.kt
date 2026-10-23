@@ -21,6 +21,9 @@ import androidx.lifecycle.lifecycleScope
 import com.neoai.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,6 +35,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var voice: VoiceController
 
     private var speaking = false
+    private var isResumed = false
+    private var awaitingConfirm: PendingAction? = null
+    private var confirmTries = 0
+
+    private data class PendingAction(val intent: String, val args: JSONObject)
 
     private val trackedPermissions = listOf(
         Manifest.permission.RECORD_AUDIO,
@@ -64,6 +72,8 @@ class MainActivity : AppCompatActivity() {
 
         setupWebView()
         setupVoice()
+        loadUi()
+        syncWebUi()
 
         if (!prefs.handsFree) {
             NeoForegroundService.stop(this)
@@ -99,14 +109,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.web.addJavascriptInterface(Bridge(), "NeoNative")
-        binding.web.loadUrl("file:///android_asset/web/index.html")
     }
 
     private fun setupVoice() {
         voice.onPartial = { text -> js("Neo.onPartial(${JSONObject.quote(text)})") }
         voice.onFinal = { text ->
             js("Neo.onPartial('')")
-            runTurn(text.trim(), fromVoice = true)
+            if (awaitingConfirm != null) handleConfirmAnswer(text.trim())
+            else runTurn(text.trim(), fromVoice = true)
         }
         voice.onError = { message ->
             js("Neo.onPartial('')")
@@ -117,10 +127,78 @@ class MainActivity : AppCompatActivity() {
             speaking = true
             js("Neo.onState('speaking')")
         }
-        voice.onSpeechEnd = {
-            speaking = false
-            js("Neo.onState('idle')")
-            js("Neo.onSpeakEnd()")
+        voice.onSpeechEnd = { onReplyFinished() }
+    }
+
+    /** Called whenever a spoken reply finished (local TTS or ElevenLabs audio). */
+    private fun onReplyFinished() {
+        speaking = false
+        js("Neo.onState('idle')")
+        js("Neo.onSpeakEnd()")
+        if (awaitingConfirm != null) {
+            binding.web.postDelayed({ startConfirmListen() }, 300)
+            return
+        }
+        if (prefs.handsFree && isResumed) {
+            binding.web.postDelayed({
+                if (isResumed && prefs.handsFree && awaitingConfirm == null &&
+                    !speaking && !voice.isListening()
+                ) {
+                    startVoiceListen()
+                }
+            }, 450)
+        }
+    }
+
+    private fun startVoiceListen() {
+        if (!isResumed || voice.isListening()) return
+        if (ContextCompat.checkSelfPermission(
+                this, Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return
+        js("Neo.onState('listening')")
+        voice.startListening(prefs.language)
+    }
+
+    private fun startConfirmListen() {
+        if (awaitingConfirm == null || !isResumed) return
+        startVoiceListen()
+    }
+
+    private fun beginVoiceConfirm(intent: String, args: JSONObject) {
+        awaitingConfirm = PendingAction(intent, args)
+        confirmTries = 0
+        js("Neo.onState('thinking')")
+        speak(device.voicePrompt(intent, args) + " Haan ya nahi?", force = true)
+    }
+
+    private fun handleConfirmAnswer(raw: String) {
+        val pending = awaitingConfirm ?: return
+        val t = raw.lowercase()
+        val yes = Regex("\\b(haan|han|ha|yes|yeah|yep|bilkul|kar do|kardo|bhej do|bhejdo|send|theek|thik|ok|okay|sahi)\\b")
+            .containsMatchIn(t)
+        val no = Regex("\\b(nahi|nahin|na|no|cancel|mat|ruko|band|stop)\\b").containsMatchIn(t)
+        when {
+            yes -> {
+                awaitingConfirm = null
+                confirmTries = 0
+                perform(pending.intent, pending.args, "")
+            }
+            no -> {
+                awaitingConfirm = null
+                confirmTries = 0
+                finishWithReply("Cancel kar diya.", "")
+            }
+            else -> {
+                confirmTries++
+                if (confirmTries >= 2) {
+                    awaitingConfirm = null
+                    confirmTries = 0
+                    finishWithReply("Cancel kar diya.", "")
+                } else {
+                    speak("Samajh nahi aaya. Haan ya nahi?", force = true)
+                }
+            }
         }
     }
 
@@ -142,6 +220,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        val quick = device.localQuickIntent(text)
+        if (quick != null) {
+            handleDeviceIntent(quick.first, quick.second, "", fromVoice)
+            return
+        }
+
         lifecycleScope.launch {
             try {
                 val ctx = api.deviceContext(
@@ -159,7 +243,7 @@ class MainActivity : AppCompatActivity() {
                 if (intent.isBlank() || intent == "chat" || intent == "none") {
                     finishWithReply(reply, intent)
                 } else {
-                    handleDeviceIntent(intent, args, reply)
+                    handleDeviceIntent(intent, args, reply, fromVoice)
                 }
             } catch (e: Exception) {
                 js("Neo.onState('idle')")
@@ -170,7 +254,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleDeviceIntent(intent: String, args: JSONObject, aiReply: String) {
+    private fun handleDeviceIntent(intent: String, args: JSONObject, aiReply: String, fromVoice: Boolean = false) {
         if (intent == "weather") {
             lifecycleScope.launch {
                 val loc = lastLocation()
@@ -181,6 +265,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 finishWithReply(text, "weather")
             }
+            return
+        }
+        if (device.requiresConfirmation(intent) && fromVoice) {
+            beginVoiceConfirm(intent, args)
             return
         }
         if (device.requiresConfirmation(intent)) {
@@ -215,9 +303,10 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- speak
 
-    private fun speak(text: String) {
-        if (!prefs.speakReplies || text.isBlank()) {
+    private fun speak(text: String, force: Boolean = false) {
+        if ((!prefs.speakReplies && !force) || text.isBlank()) {
             js("Neo.onState('idle')")
+            binding.web.postDelayed({ if (isResumed) onReplyFinished() }, 180)
             return
         }
         lifecycleScope.launch {
@@ -269,11 +358,93 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ------------------------------------------------------ WebView hot update
+
+    private fun webDir() = File(filesDir, "web")
+
+    private fun loadUi() {
+        val local = File(webDir(), "index.html")
+        val url = if (local.isFile) "file://${local.absolutePath}" else "file:///android_asset/web/index.html"
+        binding.web.loadUrl(url)
+    }
+
+    /**
+     * Downloads changed UI files from the backend, verifies every SHA-256, then
+     * swaps the folder and reloads. Native Kotlin/Gradle changes still need an
+     * APK install; HTML/CSS/JS do not.
+     */
+    private fun syncWebUi() {
+        lifecycleScope.launch {
+            runCatching {
+                val manifest = api.uiManifest() ?: return@launch
+                val version = manifest.optString("version")
+                val entries = manifest.optJSONObject("files") ?: return@launch
+                val current = webDir()
+                if (version.isNotBlank() && version == prefs.uiVersion &&
+                    File(current, "index.html").isFile
+                ) return@launch
+
+                val tmp = File(filesDir, "web.tmp")
+                tmp.deleteRecursively()
+                if (!tmp.mkdirs()) throw IOException("cannot create temp dir")
+
+                var total = 0L
+                val names = entries.keys()
+                while (names.hasNext()) {
+                    val rel = names.next()
+                    if (rel.isBlank() || rel.contains("..") ||
+                        !rel.matches(Regex("^[A-Za-z0-9._/-]+$"))
+                    ) continue
+                    val meta = entries.optJSONObject(rel) ?: continue
+                    val expected = meta.optString("sha256")
+                    if (expected.length != 64) continue
+                    val bytes = api.uiFile(rel) ?: throw IOException("missing $rel")
+                    total += bytes.size
+                    if (bytes.size > 4 * 1024 * 1024 || total > 16 * 1024 * 1024) {
+                        throw IOException("UI bundle too large")
+                    }
+                    if (sha256(bytes) != expected) throw IOException("hash mismatch: $rel")
+                    val target = File(tmp, rel)
+                    if (!target.canonicalPath.startsWith(tmp.canonicalPath + File.separator)) {
+                        throw IOException("unsafe path: $rel")
+                    }
+                    target.parentFile?.mkdirs()
+                    target.writeBytes(bytes)
+                }
+                if (!File(tmp, "index.html").isFile) throw IOException("index.html missing")
+
+                current.deleteRecursively()
+                if (!tmp.renameTo(current)) {
+                    tmp.copyRecursively(current, overwrite = true)
+                    tmp.deleteRecursively()
+                }
+                prefs.uiVersion = version
+                runOnUiThread { if (!isFinishing) loadUi() }
+            }.onFailure {
+                // Keep the previous UI (or bundled assets) when anything fails.
+            }
+        }
+    }
+
+    private fun sha256(bytes: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
+        val out = StringBuilder(digest.size * 2)
+        for (b in digest) out.append("%02x".format(b.toInt() and 0xff))
+        return out.toString()
+    }
+
     override fun onResume() {
         super.onResume()
+        isResumed = true
         NeoAccessibilityService.userEnabledAutomation = prefs.automation
         pushAppState()
         checkBackend()
+    }
+
+    override fun onPause() {
+        isResumed = false
+        if (voice.isListening()) voice.stopListening()
+        super.onPause()
     }
 
     override fun onDestroy() {
@@ -341,8 +512,7 @@ class MainActivity : AppCompatActivity() {
                     return@runOnUiThread
                 }
                 this@MainActivity.stopSpeaking()
-                js("Neo.onState('listening')")
-                voice.startListening(prefs.language)
+                startVoiceListen()
             }
         }
 
@@ -363,17 +533,14 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun speakDone() {
-            runOnUiThread {
-                js("Neo.onState('idle')")
-                speaking = false
-            }
+            runOnUiThread { onReplyFinished() }
         }
 
         @JavascriptInterface
         fun executeIntent(intent: String, argsJson: String) {
             runOnUiThread {
                 val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
-                handleDeviceIntent(intent, args, "")
+                handleDeviceIntent(intent, args, "", fromVoice = false)
             }
         }
 

@@ -110,6 +110,21 @@ Release build (optional): create a keystore, configure `signingConfigs`, then
 
 ---
 
+## 2b. Update the Web UI without reinstalling
+
+Native Kotlin changes need a new APK, but HTML/CSS/JS do not:
+
+```bash
+cd ~/opencode/neo-ai
+# edit android/app/src/main/assets/web/*
+./scripts/sync_webui.sh
+```
+
+Restart the backend once if it is not already serving (endpoints read from
+`backend/webui` live). Next time the app opens, it fetches `/app/manifest`,
+downloads only changed files, checks SHA-256 and reloads. A bad download keeps
+the previous UI; there is no way to brick the interface remotely.
+
 ## 3. First run
 
 1. Open **NEO AI** → setup wizard appears.

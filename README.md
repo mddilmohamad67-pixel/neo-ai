@@ -24,11 +24,15 @@ Two supported modes (switch in app ▸ Settings ▸ Connection):
   sway, head tracking by drag, happy reaction, and lip-sync while speaking.
 - Voice in Hindi / Hinglish / English using Android's speech recognizer.
 - Natural female voice via ElevenLabs, with Android TTS fallback.
+- Voice-only confirmation ("haan/nahi") plus hands-free auto-listen after replies.
 - Device control: apps, deep links, calls, WhatsApp/SMS drafts, volume, torch,
   settings, reminders/alarms, weather.
 - User-authorized Accessibility automation (tap text, type, scroll, back/home)
   with an explicit ON badge and Stop control.
-- Confirmation dialogs for calls, messages, reminders and UI automation.
+- Confirmation prompts for calls, messages, reminders and UI automation.
+- WhatsApp auto-send via Accessibility (tap Send after `wa.me` prefills the chat).
+- WebUI hot updates: edit `assets/web`, run `scripts/sync_webui.sh`, and the app
+  picks up HTML/CSS/JS from `/app/manifest` without reinstalling the APK.
 - Light + dark themes, setup wizard, permission dashboard.
 
 ## Quick start

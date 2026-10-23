@@ -51,6 +51,20 @@ class DeviceController(
         else -> "Ye action chalayein?"
     }
 
+    /** Short spoken prompt used by the hands-free "haan/nahi" confirmation. */
+    fun voicePrompt(intent: String, args: JSONObject): String {
+        val name = args.optString("name").ifBlank { args.optString("number") }
+        val msg = args.optString("message")
+        return when (intent) {
+            "call" -> "$name ko call kar doon?"
+            "whatsapp" -> "$name ko WhatsApp par $msg bhej doon?"
+            "sms" -> "$name ko SMS me $msg bhej doon?"
+            "reminder" -> "Calendar me reminder bana doon?"
+            "accessibility" -> "Screen par action kar doon?"
+            else -> "Kar doon?"
+        }
+    }
+
     fun execute(intent: String, args: JSONObject): ActionResult = try {
         when (intent) {
             "open_app" -> openApp(args.optString("app"))
@@ -181,16 +195,29 @@ class DeviceController(
         if (ambiguous) return ActionResult(false, "Ek se zyada contacts mile. Poora naam bataiye.")
         if (match == null || resolved.isBlank()) return ActionResult(false, "\"$name\" contacts me nahi mila.")
         val digits = resolved.filter { it.isDigit() }
+        if (digits.isBlank()) return ActionResult(false, "Contact ka number theek nahi hai.")
         val text = Uri.encode(message)
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$digits?text=$text"))
-            .setPackage("com.whatsapp")
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return try {
-            context.startActivity(intent)
-            ActionResult(true, "${match.name} ke liye WhatsApp draft khul gaya. Send aapko dabana hai.")
-        } catch (e: ActivityNotFoundException) {
-            ActionResult(false, "WhatsApp install nahi hai. SMS ya share use karein.")
+        val auto = NeoAccessibilityService.enabled && NeoAccessibilityService.userEnabledAutomation
+        val url = Uri.parse("https://wa.me/$digits?text=$text")
+        for (pkg in listOf("com.whatsapp", "com.whatsapp.w4b")) {
+            try {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, url)
+                        .setPackage(pkg)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                if (auto) NeoAccessibilityService.scheduleWhatsAppSend()
+                val how = if (auto) {
+                    "chat khul gaya, message auto-send kar rahi hoon."
+                } else {
+                    "ke liye WhatsApp draft khul gaya. Send aapko dabana hai."
+                }
+                return ActionResult(true, "${match.name} $how")
+            } catch (_: ActivityNotFoundException) {
+                // try WhatsApp Business, then report
+            }
         }
+        return ActionResult(false, "WhatsApp install nahi hai. SMS ya share use karein.")
     }
 
     private fun sms(name: String, number: String, message: String): ActionResult {
@@ -312,6 +339,52 @@ class DeviceController(
     }
 
     // ------------------------------------------------------------ local NLU
+
+    /**
+     * Message/call commands resolved on-device so the confirmation appears
+     * instantly (no 2-4s AI round trip). These still require confirmation.
+     */
+    fun localQuickIntent(text: String): Pair<String, JSONObject>? {
+        val t = text.trim()
+        val wa = Regex(
+            "^(.+?)\\s+ko\\s+(?:whatsapp|watsapp|wa)\\s+(?:par\\s+|pe\\s+)?(?:message|msg|sandesh)?\\s*(?:bhejo|bhej\\s*do|bhejdo|likho|send\\s*karo|kar\\s*do)[:\\- ]+(.+)$",
+            RegexOption.IGNORE_CASE
+        ).find(t)
+        val wa2 = Regex(
+            "^(?:whatsapp|watsapp|wa)\\s+(?:par|pe)\\s+(.+?)\\s+ko\\s+(?:message|msg)?\\s*(?:bhejo|likho|send\\s*karo)[:\\- ]+(.+)$",
+            RegexOption.IGNORE_CASE
+        ).find(t)
+        val waHit = wa ?: wa2
+        if (waHit != null) {
+            val name = waHit.groupValues[1].trim()
+            val message = waHit.groupValues[2].trim().trim('"', '\'', ' ')
+            if (name.isNotBlank() && message.isNotBlank()) {
+                return "whatsapp" to JSONObject().put("name", name).put("message", message)
+            }
+        }
+
+        val sms = Regex(
+            "^(.+?)\\s+ko\\s+(?:sms|text\\s*message)\\s*(?:bhejo|likho|kar\\s*do)?[:\\- ]+(.+)$",
+            RegexOption.IGNORE_CASE
+        ).find(t)
+        if (sms != null) {
+            val name = sms.groupValues[1].trim()
+            val message = sms.groupValues[2].trim().trim('"', '\'', ' ')
+            if (name.isNotBlank() && message.isNotBlank()) {
+                return "sms" to JSONObject().put("name", name).put("message", message)
+            }
+        }
+
+        val call = Regex(
+            "^(.+?)\\s+ko\\s+(?:call|phone)\\s*(?:karo|kar\\s*do|laga\\s*do|lagao|milao|karein)$",
+            RegexOption.IGNORE_CASE
+        ).find(t)
+        if (call != null) {
+            val name = call.groupValues[1].trim()
+            if (name.isNotBlank()) return "call" to JSONObject().put("name", name)
+        }
+        return null
+    }
 
     /** Handles safe, deterministic commands without the backend. */
     fun tryLocal(text: String): ActionResult? {

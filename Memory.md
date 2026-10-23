@@ -53,3 +53,9 @@
 - Which Android version/device will be the primary test target?
 - Does the user have OpenAI and ElevenLabs keys ready?
 - Prefer Hindi female voice id from ElevenLabs (choose a voice ID).
+
+## 2026-10-23 — voice-only, WhatsApp auto-send, WebUI hot update
+- Backend: added `/app/manifest` and `/app/file/{path}` (auth, SHA-256, traversal guard), `backend/webui/`, `scripts/sync_webui.sh`. `.env` now uses Gemini OpenAI-compatible endpoint (`gemini-3.5-flash`, JSON mode off).
+- Android: on-device quick parse for WhatsApp/SMS/call (instant confirm), spoken "haan/nahi" confirmation, hands-free auto-listen after every reply, WhatsApp auto-send via Accessibility (`com.whatsapp:id/send` poll), WebView loader prefers downloaded `filesDir/web`, verifies manifest hashes, falls back to APK assets.
+- Rebuilt debug APK with all native changes; API/README/LIMITATIONS/SETUP updated.
+- Next: user installs this build once; future HTML/CSS/JS changes ship through `/app/manifest` (no reinstall). Rotate both chat-pasted keys.

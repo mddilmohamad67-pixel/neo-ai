@@ -14,8 +14,13 @@ bugs. Anything listed here will be reported to the user instead of faked.
   profile URL (`instagram.com/_u/<user>/`), or (with automation ON) try to tap a
   visible "Search" control. If the UI changes or the button is not exposed,
   NEO says so. It never claims a search succeeded.
-- **WhatsApp / SMS are drafts.** `wa.me` and `smsto:` intents prefill the message;
-  only the user presses Send. Direct sending is not exposed by Android.
+- **WhatsApp auto-send needs Accessibility ON.** `wa.me` prefills the message.
+  With automation ON, NEO watches for `com.whatsapp:id/send` for ~20 s and taps
+  it once. If WhatsApp changes its UI, a contact is ambiguous, or automation is
+  off, the draft stays open for the user to press Send. SMS remains draft-only.
+- **WebUI hot update only covers HTML/CSS/JS.** The app downloads changed
+  `assets/web` files from `/app/manifest`, verifies SHA-256 and reloads. Kotlin,
+  manifest, permissions or Gradle changes still require reinstalling the APK.
 - **Calls** use `ACTION_CALL` after confirmation. The app cannot prove the call
   connected — it reports "call placed", not "person talked".
 - **Reminders / alarms** open the system Calendar/AlarmClock screen. NEO cannot
@@ -35,8 +40,9 @@ bugs. Anything listed here will be reported to the user instead of faked.
   version would drain battery and fail unpredictably. Press-to-talk is the
   supported path.
 - **Hands-free mode** keeps a foreground service + notification, but Android (and
-  OEM battery managers) may suspend the mic with the screen off. NEO does not
-  promise 24/7 listening.
+  OEM battery managers) may suspend the mic with the screen off. NEO listens
+  again after each reply while the app is in front; it does not promise 24/7
+  listening or a wake word.
 - **No call recording, no OTP/password reading, no private-chat scraping.**
 - **Internet required** for OpenAI chat, ElevenLabs and weather. Rule-based
   device commands work offline.

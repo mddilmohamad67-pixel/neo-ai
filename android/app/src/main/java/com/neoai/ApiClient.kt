@@ -69,6 +69,29 @@ class ApiClient(private val prefs: Prefs) {
         }.getOrDefault(false)
     }
 
+    /** WebView hot-update manifest (authenticated). */
+    suspend fun uiManifest(): JSONObject? = withContext(Dispatchers.IO) {
+        runCatching {
+            if (prefs.token.isBlank()) return@runCatching null
+            val res = http.newCall(request("/app/manifest").get().build()).execute()
+            res.use {
+                if (!it.isSuccessful) return@runCatching null
+                JSONObject(it.body?.string().orEmpty())
+            }
+        }.getOrNull()
+    }
+
+    suspend fun uiFile(path: String): ByteArray? = withContext(Dispatchers.IO) {
+        runCatching {
+            val safe = path.split("/").joinToString("/") { android.net.Uri.encode(it) }
+            val res = http.newCall(request("/app/file/$safe").get().build()).execute()
+            res.use {
+                if (!it.isSuccessful) return@runCatching null
+                it.body?.bytes()
+            }
+        }.getOrNull()
+    }
+
     suspend fun chat(text: String, deviceContext: JSONObject): JSONObject = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("message", text)

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#07070D" />
+<title>NEO AI</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body class="dark">
+  <div class="aurora">
+    <span class="blob b1"></span>
+    <span class="blob b2"></span>
+    <span class="blob b3"></span>
+    <span class="grid"></span>
+  </div>
+
+  <canvas id="stage"></canvas>
+  <div class="vignette"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">N</span>
+      <div class="brand-text">
+        <strong>NEO</strong>
+        <small>personal ai</small>
+      </div>
+    </div>
+    <div class="top-right">
+      <button id="automationBadge" class="badge automation hidden" type="button">
+        <span class="dot"></span>AUTOMATION ON
+      </button>
+      <button id="netBadge" class="badge offline" type="button" title="Server status">
+        <span class="dot"></span><span id="netText">offline</span>
+      </button>
+      <button id="settingsBtn" class="icon-btn" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.14 12.94a7.5 7.5 0 0 0 .05-.94 7.5 7.5 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.66 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.5 7.5 0 0 0 0 1.88L2.78 14.5a.5.5 0 0 0-.12.64l1.92 3.32c.14.24.42.34.68.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.26.12.54.02.68-.22l1.92-3.32a.5.5 0 0 0-.12-.64ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hello">
+      <span class="eyebrow">NEO is <em id="heroState">ready</em></span>
+      <h1 id="greeting">Hi, <span>Rehan</span></h1>
+      <p id="subline">Bolo ya likho — main sun rahi hoon.</p>
+    </div>
+  </section>
+
+  <main class="sheet" id="sheet">
+    <div class="grabber" id="grabber"></div>
+
+    <div class="chat" id="chat" aria-live="polite">
+      <div class="msg neo">
+        <div class="bubble">
+          Hi! Main <b>NEO</b> hoon. Aapki personal assistant. Mic dabaiye ya neeche likhein —
+          apps kholna, message draft, call, torch, weather, reminders, sab bataiye.
+        </div>
+      </div>
+    </div>
+
+    <div class="typing hidden" id="typing"><span></span><span></span><span></span></div>
+
+    <div class="chips" id="chips">
+      <button data-cmd="Aaj ka weather batao">Weather</button>
+      <button data-cmd="Torch on karo">Torch</button>
+      <button data-cmd="Sonia ko call karo">Call</button>
+      <button data-cmd="Mujhe reminder set karke do: ">Reminder</button>
+      <button data-cmd="Instagram kholo">Instagram</button>
+      <button data-cmd="Phone settings kholo">Settings</button>
+    </div>
+
+    <div class="composer">
+      <button class="icon-btn soft" id="keyboardBtn" aria-label="Type">
+        <svg viewBox="0 0 24 24" width="21" height="21"><path fill="currentColor" d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Zm-9 3h2v2h-2V8Zm0 3h2v2h-2v-2ZM8 8h2v2H8V8Zm0 3h2v2H8v-2Zm-3-3h2v2H5V8Zm0 3h2v2H5v-2Zm3 5H5v-2h6v2h-3Zm8 0h-5v-2h5v2Zm0-3h-2v-2h2v2Zm0-3h-2V8h2v2Zm3 6h-2v-2h2v2Zm0-3h-2v-2h2v2Zm0-3h-2V8h2v2Z"/></svg>
+      </button>
+
+      <form class="typebar" id="typebar">
+        <input id="input" type="text" autocomplete="off" placeholder="NEO se kuch bhi poochhein…" />
+        <button type="submit" class="send" aria-label="Send">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6l.01 6.53L15 12 3.41 13.87z"/></svg>
+        </button>
+      </form>
+
+      <button class="mic" id="micBtn" aria-label="Talk to NEO">
+        <span class="ring"></span>
+        <span class="ring r2"></span>
+        <span class="mic-core">
+          <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5.3-3a5.3 5.3 0 0 1-10.6 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-1.7Z"/></svg>
+        </span>
+      </button>
+
+      <button class="icon-btn soft hidden" id="stopBtn" aria-label="Stop">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>
+      </button>
+    </div>
+
+    <div class="status" id="statusLine">
+      <span class="pulse"></span>
+      <span id="statusText">Tap mic and say “Neo, YouTube kholo”</span>
+    </div>
+
+    <div class="partial" id="partial"></div>
+  </main>
+
+  <!-- Settings sheet -->
+  <div class="overlay hidden" id="settingsOverlay">
+    <div class="panel" role="dialog" aria-modal="true">
+      <div class="panel-head">
+        <h2>Settings</h2>
+        <button class="icon-btn" id="closeSettings" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+        </button>
+      </div>
+
+      <div class="panel-body">
+        <section class="group">
+          <h3>Connection · Local or Cloud</h3>
+          <div class="row presets">
+            <button class="btn ghost" id="presetLocal" type="button">Local Termux</button>
+            <button class="btn ghost" id="presetCloud" type="button">Cloud (HTTPS)</button>
+          </div>
+          <label class="field">
+            <span>Backend URL</span>
+            <input id="serverUrl" type="url" inputmode="url" autocapitalize="off" spellcheck="false"
+                   placeholder="https://your-neo.onrender.com" />
+          </label>
+          <label class="field">
+            <span>Device access token</span>
+            <input id="token" type="password" spellcheck="false" autocomplete="off"
+                   placeholder="Server ke NEO_TOKEN se match karna chahiye" />
+          </label>
+          <div class="row">
+            <button class="btn ghost" id="copyToken" type="button">Copy token</button>
+            <button class="btn" id="checkServer" type="button">Check server</button>
+          </div>
+          <p class="conn-lock" id="connSecurity">Checking connection mode…</p>
+          <p class="hint" id="connHint">OpenAI/ElevenLabs keys sirf backend par rehti hain — APK, WebView aur browser me kabhi nahi. Cloud ke liye <code>https://</code> zaroori hai.</p>
+        </section>
+
+        <section class="group">
+          <h3>Voice</h3>
+          <label class="field">
+            <span>Language</span>
+            <select id="language">
+              <option value="hi-IN">Hindi / Hinglish</option>
+              <option value="en-IN">English (India)</option>
+              <option value="en-US">English (US)</option>
+            </select>
+          </label>
+          <label class="switch">
+            <input id="speakReplies" type="checkbox" />
+            <span class="track"><span class="thumb"></span></span>
+            <span>Speak replies aloud</span>
+          </label>
+          <label class="field">
+            <span>Your name</span>
+            <input id="userName" type="text" />
+          </label>
+          <p class="hint">ElevenLabs voice backend se aati hai. Agar key nahi hai to phone ki built-in voice use hogi.</p>
+        </section>
+
+        <section class="group">
+          <h3>Android access</h3>
+          <div class="perm-list" id="permList"></div>
+          <div class="row">
+            <button class="btn ghost" id="askPerms">Request permissions</button>
+            <button class="btn ghost" id="batteryBtn">Battery settings</button>
+          </div>
+          <label class="switch">
+            <input id="automation" type="checkbox" />
+            <span class="track"><span class="thumb"></span></span>
+            <span>Allow UI automation (tap / type / scroll)</span>
+          </label>
+          <button class="btn wide ghost" id="a11yBtn">Open Accessibility settings</button>
+          <label class="switch">
+            <input id="handsFree" type="checkbox" />
+            <span class="track"><span class="thumb"></span></span>
+            <span>Hands-free foreground mode</span>
+          </label>
+          <p class="hint">Android background me mic ko kabhi-kabhi band kar deta hai. NEO notification dikhati hai jab mode on ho. Stop dabate hi listening band.</p>
+        </section>
+
+        <section class="group">
+          <h3>Appearance</h3>
+          <label class="switch">
+            <input id="lightTheme" type="checkbox" />
+            <span class="track"><span class="thumb"></span></span>
+            <span>Light theme</span>
+          </label>
+        </section>
+
+        <section class="group">
+          <h3>Privacy</h3>
+          <p class="hint">Voice audio Android ke speech recognizer se guzarta hai. Text OpenAI ko jata hai (backend ke through). Device actions phone par local rehte hain. NEO OTP, passwords ya private chats kabhi nahi padhti/stores nahi karti.</p>
+          <p class="hint small">NEO AI v1.0 · local-first assistant</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- First-run wizard -->
+  <div class="overlay hidden" id="wizardOverlay">
+    <div class="panel wizard">
+      <div class="wizard-art"><span class="orb"></span></div>
+      <h2>Namaste, main NEO hoon</h2>
+      <p class="wizard-sub">Setup 1 minute: mic, contacts, aur (optional) accessibility. Har permission aap khud dete hain, aur kabhi bhi band kar sakte hain.</p>
+      <ol class="steps" id="wizardSteps">
+        <li data-step="mic"><b>Microphone</b><span>Aawaz sunne ke liye</span><button class="btn tiny" data-act="mic">Allow</button></li>
+        <li data-step="contacts"><b>Contacts &amp; phone</b><span>Call / message draft ke liye</span><button class="btn tiny" data-act="contacts">Allow</button></li>
+        <li data-step="notif"><b>Notifications</b><span>Background indicator</span><button class="btn tiny" data-act="notif">Allow</button></li>
+        <li data-step="a11y"><b>Accessibility (optional)</b><span>Sirf automation ON par</span><button class="btn tiny" data-act="a11y">Open</button></li>
+      </ol>
+      <div class="row">
+        <button class="btn ghost" id="wizardLater">Later</button>
+        <button class="btn" id="wizardDone">Start NEO</button>
+      </div>
+      <p class="hint center">Backend: local Termux ya apna HTTPS cloud host — Settings me URL + token daalein.</p>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toasts"></div>
+
+  <script src="three.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import hmac
 import json
 import logging
+import mimetypes
 import os
 import re
 import secrets
@@ -30,11 +32,12 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 ROOT = Path(__file__).resolve().parent
+WEBUI_DIR = ROOT / "webui"
 load_dotenv(ROOT / ".env")
 LOG_DIR = ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -72,6 +75,8 @@ if PRODUCTION and any(len(t) < 24 or t.lower() in ("change-me", "changeme", "pas
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
 OPENAI_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+OPENAI_JSON_MODE = os.getenv("OPENAI_JSON_MODE", "1").strip() in ("1", "true", "yes")
+OPENAI_REASONING = os.getenv("OPENAI_REASONING", "").strip()
 
 ELEVEN_KEY = os.getenv("ELEVENLABS_API_KEY", "").strip()
 ELEVEN_VOICE = os.getenv("ELEVENLABS_VOICE_ID", "").strip()
@@ -248,6 +253,27 @@ battery {}
 none {}
 """.strip()
 
+KNOWN_INTENTS = {
+    "open_app", "open_url", "search", "call", "whatsapp", "sms", "volume",
+    "torch", "settings", "reminder", "alarm", "accessibility", "time",
+    "battery", "weather", "none",
+}
+
+
+def sanitize_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Never let a model-invented intent reach the device executor."""
+    intent = str(result.get("intent") or "none").strip().lower()
+    if intent not in KNOWN_INTENTS:
+        intent = "none"
+    args = result.get("args")
+    if not isinstance(args, dict):
+        args = {}
+    reply = str(result.get("reply") or "").strip()[:900]
+    if not reply:
+        reply = "Theek hai." if intent == "none" else ""
+    return {"reply": reply, "intent": intent, "args": args}
+
+
 SYSTEM_PROMPT = """You are NEO, a warm, witty female personal assistant living on the user's Android phone.
 You speak natural Hinglish (Hindi + English mixed) by default, in short sentences (max 2 sentences).
 You are honest: never claim an action happened unless the device reports it. If the user wants a
@@ -406,11 +432,10 @@ def rule_reply(message: str) -> Dict[str, Any]:
 # ------------------------------------------------------------------ OpenAI
 
 async def openai_chat(message: str, language: str, user_name: str, device: Dict[str, Any]) -> Dict[str, Any]:
-    payload = {
+    payload: Dict[str, Any] = {
         "model": OPENAI_MODEL,
-        "temperature": 0.6,
+        "temperature": 0.5,
         "max_tokens": 320,
-        "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -427,6 +452,10 @@ async def openai_chat(message: str, language: str, user_name: str, device: Dict[
             },
         ],
     }
+    if OPENAI_JSON_MODE:
+        payload["response_format"] = {"type": "json_object"}
+    if OPENAI_REASONING:
+        payload["reasoning_effort"] = OPENAI_REASONING
     headers = {"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=40) as client:
         res = await client.post(f"{OPENAI_URL}/chat/completions", json=payload, headers=headers)
@@ -510,6 +539,40 @@ async def health_full(_: None = Depends(auth)) -> Dict[str, Any]:
     }
 
 
+@app.get("/app/manifest")
+async def app_manifest(_: None = Depends(auth)) -> Dict[str, Any]:
+    """Hot-update manifest for the WebView UI (version = hash of all files)."""
+    if not WEBUI_DIR.is_dir():
+        raise HTTPException(status_code=404, detail="Web UI not published")
+    files: Dict[str, Any] = {}
+    digest = hashlib.sha256()
+    for path in sorted(WEBUI_DIR.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(WEBUI_DIR).as_posix()
+        data = path.read_bytes()
+        file_hash = hashlib.sha256(data).hexdigest()
+        files[rel] = {"sha256": file_hash, "size": len(data)}
+        digest.update(rel.encode())
+        digest.update(file_hash.encode())
+    return {"version": digest.hexdigest()[:16], "files": files}
+
+
+@app.get("/app/file/{path:path}")
+async def app_file(path: str, _: None = Depends(auth)) -> FileResponse:
+    """Serves one WebView asset; path traversal is rejected."""
+    if not WEBUI_DIR.is_dir():
+        raise HTTPException(status_code=404, detail="Web UI not published")
+    target = (WEBUI_DIR / path).resolve()
+    root = WEBUI_DIR.resolve()
+    if root != target and root not in target.parents:
+        raise HTTPException(status_code=403, detail="Invalid path")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    media = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+    return FileResponse(target, media_type=media)
+
+
 @app.post("/chat")
 async def chat(body: ChatIn, _: None = Depends(auth)) -> Dict[str, Any]:
     message = body.message.strip()
@@ -540,6 +603,7 @@ async def chat(body: ChatIn, _: None = Depends(auth)) -> Dict[str, Any]:
             text = "Weather service se connect nahi ho paya."
         result = {"reply": text, "intent": "none", "args": {}}
 
+    result = sanitize_result(result)
     log.info("chat intent=%s ok=%s", result.get("intent"), bool(result.get("reply")))
     return result
 
