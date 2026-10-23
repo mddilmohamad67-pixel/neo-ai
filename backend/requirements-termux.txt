@@ -1,0 +1,10 @@
+# Termux/Android Python (3.14) has no manylinux wheels, so pydantic-core
+# cannot be built without Rust. These versions install as pure Python.
+# Used automatically by run.sh inside Termux; cloud/Docker uses requirements.txt.
+fastapi==0.110.0
+starlette==0.36.3
+uvicorn==0.29.0
+httpx==0.27.0
+python-dotenv==1.0.1
+python-multipart==0.0.9
+pydantic==1.10.26

@@ -1,18 +1,36 @@
-# NEO local API
+# NEO API
 
-Base URL: `http://127.0.0.1:8787` (default). Every route except none requires:
+Base URL: `http://127.0.0.1:8787` locally, or `https://your-host` in cloud mode.
+Every route except `/health` requires a device token:
 
 ```
-X-Neo-Token: <NEO_TOKEN>
+Authorization: Bearer <NEO_TOKEN>
+# X-Neo-Token: <NEO_TOKEN>   (also accepted)
 ```
 
 Responses are JSON except `/tts` (`audio/mpeg`). Rate limit: 60 requests/minute
-per token prefix + client, configurable with `NEO_RATE_PER_MIN`.
+per token fingerprint + client (`NEO_RATE_PER_MIN`), optional daily cap
+(`NEO_DAILY_REQUESTS`). Production requires HTTPS and starts only with tokens
+≥ 24 chars. No CORS headers are sent — only the native app is meant to call it.
+
+Errors: `401` bad token, `403` HTTPS required, `413` body too large,
+`429` rate limit, `503` provider not configured.
 
 ## GET /health
 
+Public liveness probe, no token, no configuration details:
+
 ```json
-{"ok": true, "openai": true, "elevenlabs": false, "model": "gpt-4o-mini", "time": "..."}
+{"ok": true, "service": "neo"}
+```
+
+## GET /health/full
+
+Authenticated capability check (used by the app badge):
+
+```json
+{"ok": true, "openai": true, "elevenlabs": false, "transcribe": true,
+ "model": "gpt-4o-mini", "secure": true, "time": "..."}
 ```
 
 ## POST /chat

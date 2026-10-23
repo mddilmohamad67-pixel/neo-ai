@@ -1,10 +1,11 @@
 """
-NEO AI backend — runs inside Termux on the phone.
+NEO AI backend — runs in Termux or on any small cloud host (Docker/Render/Fly/VPS).
 
 Design rules:
-  * binds to 127.0.0.1 by default (no LAN exposure)
-  * every request needs X-Neo-Token (constant-time compare)
-  * API keys live only in the environment / .env file, never in the APK
+  * binds to 127.0.0.1 by default; production uses 0.0.0.0 behind HTTPS
+  * every AI request needs a bearer token (constant-time compare, multi-device)
+  * OpenAI / ElevenLabs keys live only in server env, never in the APK or WebView
+  * HTTPS is required for every non-private host; HSTS + security headers always on
   * deterministic intent parsing works without OpenAI for device commands
 """
 
@@ -28,8 +29,10 @@ from typing import Any, Deque, Dict, List, Optional
 import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env")
@@ -43,8 +46,16 @@ log.setLevel(logging.INFO)
 log.addHandler(handler)
 log.addHandler(logging.StreamHandler())
 
+ENV = os.getenv("NEO_ENV", "dev").strip().lower()
+PRODUCTION = ENV in ("prod", "production")
+REQUIRE_HTTPS = os.getenv("NEO_REQUIRE_HTTPS", "1" if PRODUCTION else "0").strip() in ("1", "true", "yes")
+
 NEO_TOKEN = os.getenv("NEO_TOKEN", "").strip()
-if not NEO_TOKEN:
+# Optional extra device tokens: NEO_TOKENS=tokenA,tokenB (rotate/revoke per device)
+EXTRA_TOKENS = [t.strip() for t in os.getenv("NEO_TOKENS", "").split(",") if t.strip()]
+if not NEO_TOKEN and not EXTRA_TOKENS:
+    if PRODUCTION:
+        raise RuntimeError("NEO_TOKEN is required when NEO_ENV=production")
     token_file = ROOT / ".neo_token"
     if token_file.exists():
         NEO_TOKEN = token_file.read_text().strip()
@@ -52,7 +63,11 @@ if not NEO_TOKEN:
         NEO_TOKEN = secrets.token_urlsafe(24)
         token_file.write_text(NEO_TOKEN)
         token_file.chmod(0o600)
-    log.warning("NEO_TOKEN was empty. Using generated token: %s", NEO_TOKEN)
+    log.warning("NEO_TOKEN was empty. Generated one at %s (open it and paste into the app)", token_file)
+
+VALID_TOKENS = [t for t in [NEO_TOKEN, *EXTRA_TOKENS] if t]
+if PRODUCTION and any(len(t) < 24 or t.lower() in ("change-me", "changeme", "password") for t in VALID_TOKENS):
+    raise RuntimeError("Production tokens must be unique and at least 24 characters")
 
 OPENAI_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
@@ -67,7 +82,21 @@ DEFAULT_LON = os.getenv("NEO_DEFAULT_LON", "77.2090")
 DEFAULT_CITY = os.getenv("NEO_DEFAULT_CITY", "New Delhi")
 RATE_PER_MIN = int(os.getenv("NEO_RATE_PER_MIN", "60"))
 
-app = FastAPI(title="NEO AI", version="1.0", docs_url=None, redoc_url=None)
+MAX_BODY = int(os.getenv("NEO_MAX_BODY", str(12 * 1024 * 1024)))
+DAILY_LIMIT = int(os.getenv("NEO_DAILY_REQUESTS", "0"))
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("NEO_ALLOWED_HOSTS", "").split(",") if h.strip()]
+ALLOWED_HOSTS = [h for h in ALLOWED_HOSTS if h != "*"]
+
+app = FastAPI(
+    title="NEO AI",
+    version="1.1",
+    docs_url=None if PRODUCTION else "/docs",
+    redoc_url=None,
+    openapi_url=None if PRODUCTION else "/openapi.json",
+)
+
+if ALLOWED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
 
 # ----------------------------------------------------------------- utilities
@@ -76,31 +105,108 @@ class RateLimiter:
     def __init__(self, limit: int) -> None:
         self.limit = limit
         self.hits: Dict[str, Deque[float]] = {}
+        self.daily: Dict[str, int] = {}
+        self.day = datetime.now().date()
         self.lock = asyncio.Lock()
 
     async def check(self, key: str) -> None:
         now = time.monotonic()
         async with self.lock:
+            today = datetime.now().date()
+            if today != self.day:
+                self.day = today
+                self.daily.clear()
             bucket = self.hits.setdefault(key, deque())
             while bucket and now - bucket[0] > 60:
                 bucket.popleft()
             if len(bucket) >= self.limit:
                 raise HTTPException(status_code=429, detail="Rate limit. Thoda ruk kar try karein.")
+            if DAILY_LIMIT > 0 and self.daily.get(key, 0) >= DAILY_LIMIT:
+                raise HTTPException(status_code=429, detail="Aaj ki limit khatam. Kal try karein.")
             bucket.append(now)
+            self.daily[key] = self.daily.get(key, 0) + 1
 
 
 limiter = RateLimiter(RATE_PER_MIN)
 
 
+def _presented_tokens(x_neo_token: Optional[str], authorization: Optional[str]) -> List[str]:
+    out = []
+    if x_neo_token:
+        out.append(x_neo_token.strip())
+    if authorization:
+        scheme, _, value = authorization.partition(" ")
+        if scheme.lower() == "bearer" and value.strip():
+            out.append(value.strip())
+    return out
+
+
+def _token_match(presented: Optional[str]) -> bool:
+    if not presented:
+        return False
+    ok = False
+    for known in VALID_TOKENS:
+        # compare_digest on every candidate keeps timing uniform
+        if hmac.compare_digest(presented, known):
+            ok = True
+    return ok
+
+
+def _fingerprint(token: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(token.encode()).hexdigest()[:10]
+
+
 async def auth(
     request: Request,
     x_neo_token: Optional[str] = Header(default=None, alias="X-Neo-Token"),
+    authorization: Optional[str] = Header(default=None, alias="Authorization"),
 ) -> None:
-    if not x_neo_token or not hmac.compare_digest(x_neo_token, NEO_TOKEN):
-        log.info("auth rejected from %s", request.client.host if request.client else "?")
+    candidates = _presented_tokens(x_neo_token, authorization)
+    if not any(_token_match(t) for t in candidates):
+        log.info(
+            "auth rejected from %s path=%s",
+            request.client.host if request.client else "?",
+            request.url.path,
+        )
         raise HTTPException(status_code=401, detail="Unauthorized: token galat hai.")
-    key = x_neo_token[:8] + "|" + (request.client.host if request.client else "local")
+    token = next(t for t in candidates if _token_match(t))
+    key = _fingerprint(token) + "|" + (request.client.host if request.client else "local")
+    request.state.token_id = _fingerprint(token)
     await limiter.check(key)
+
+
+class SecurityMiddleware(BaseHTTPMiddleware):
+    """HTTPS enforcement, body cap and headers — applies to every response."""
+
+    async def dispatch(self, request: Request, call_next):
+        proto = (request.headers.get("x-forwarded-proto") or request.url.scheme or "http").split(",")[0].strip()
+        if REQUIRE_HTTPS and proto != "https":
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "HTTPS required. Use an https:// backend URL."},
+            )
+        length = request.headers.get("content-length")
+        if length and length.isdigit() and int(length) > MAX_BODY:
+            return JSONResponse(status_code=413, content={"detail": "Request bahut bada hai."})
+        req_id = secrets.token_hex(8)
+        try:
+            response = await call_next(request)
+        except HTTPException as exc:
+            response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        response.headers["X-Request-Id"] = req_id
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if proto == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+app.add_middleware(SecurityMiddleware)
 
 
 class ChatIn(BaseModel):
@@ -385,12 +491,21 @@ WEATHER_CODES = {
 # ------------------------------------------------------------------ routes
 
 @app.get("/health")
-async def health(_: None = Depends(auth)) -> Dict[str, Any]:
+async def health() -> Dict[str, Any]:
+    """Public, minimal liveness probe — reveals no configuration."""
+    return {"ok": True, "service": "neo"}
+
+
+@app.get("/health/full")
+async def health_full(_: None = Depends(auth)) -> Dict[str, Any]:
+    """Authenticated capability check used by the app's connection badge."""
     return {
         "ok": True,
         "openai": bool(OPENAI_KEY),
         "elevenlabs": bool(ELEVEN_KEY and ELEVEN_VOICE),
+        "transcribe": bool(OPENAI_KEY),
         "model": OPENAI_MODEL,
+        "secure": REQUIRE_HTTPS,
         "time": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -515,7 +630,10 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
 
 @app.on_event("startup")
 async def startup() -> None:
-    log.info("NEO backend ready. openai=%s elevenlabs=%s", bool(OPENAI_KEY), bool(ELEVEN_KEY and ELEVEN_VOICE))
+    log.info(
+        "NEO backend ready. env=%s https_required=%s openai=%s elevenlabs=%s devices=%d",
+        ENV, REQUIRE_HTTPS, bool(OPENAI_KEY), bool(ELEVEN_KEY and ELEVEN_VOICE), len(VALID_TOKENS),
+    )
 
 
 if __name__ == "__main__":
@@ -526,4 +644,6 @@ if __name__ == "__main__":
         host=os.getenv("NEO_HOST", "127.0.0.1"),
         port=int(os.getenv("NEO_PORT", "8787")),
         log_level="info",
+        proxy_headers=True,
+        forwarded_allow_ips=os.getenv("NEO_FORWARDED_IPS", "127.0.0.1"),
     )

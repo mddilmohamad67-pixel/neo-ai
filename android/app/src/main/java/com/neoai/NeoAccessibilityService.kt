@@ -34,13 +34,18 @@ class NeoAccessibilityService : AccessibilityService() {
         if (!userEnabledAutomation || text.isBlank()) return false
         val root = rootInActiveWindow ?: return false
         val target = find(root, text) ?: return false
-        var node: AccessibilityNodeInfo? = target
+        var current: AccessibilityNodeInfo? = target
         var guard = 0
-        while (node != null && guard < 8) {
-            if (node.isClickable) return runCatching {
-                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-            }.getOrDefault(false)
-            node = node.parent
+        while (guard < 8) {
+            val node = current ?: break
+            if (node.isClickable) {
+                return try {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                } catch (_: Exception) {
+                    false
+                }
+            }
+            current = node.parent
             guard++
         }
         return runCatching { target.performAction(AccessibilityNodeInfo.ACTION_CLICK) }.getOrDefault(false)

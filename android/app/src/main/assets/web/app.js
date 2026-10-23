@@ -917,6 +917,7 @@
     $('greeting').innerHTML = 'Hi, <span>' + escapeHtml(state.name || 'there') + '</span>';
     applyTheme(state.theme);
     $('automationBadge').classList.toggle('hidden', !state.automation);
+    updateConnSecurity();
   }
 
   function escapeHtml(s) {
@@ -929,16 +930,62 @@
     call('saveConfig', JSON.stringify(partial));
   }
 
+  function isLocalHost(host) {
+    host = (host || '').toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' ||
+      host.endsWith('.local') || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  }
+
+  function inspectUrl(raw) {
+    var value = String(raw || '').trim();
+    if (!value) return { ok: false, secure: false, msg: 'Backend URL khali hai.' };
+    var url;
+    try { url = new URL(value); } catch (e) { return { ok: false, secure: false, msg: 'URL format galat hai — http:// ya https:// se shuru karein.' }; }
+    if (!/^https?:$/.test(url.protocol)) return { ok: false, secure: false, msg: 'Sirf http:// ya https:// allowed hai.' };
+    if (url.protocol === 'https:') {
+      return { ok: true, secure: true, msg: 'Secure: HTTPS encrypted · token aur chat text protected.' };
+    }
+    if (isLocalHost(url.hostname)) {
+      return { ok: true, secure: false, local: true, msg: 'Local mode: cleartext sirf is phone/LAN par. Cloud ke liye HTTPS use karein.' };
+    }
+    return { ok: false, secure: false, msg: 'Cloud URL ke liye https:// zaroori hai. HTTP par token intercept ho sakta hai.' };
+  }
+
+  function updateConnSecurity() {
+    var box = $('connSecurity');
+    var info = inspectUrl($('serverUrl').value);
+    box.className = 'conn-lock ' + (info.ok ? (info.secure ? 'secure' : 'local') : 'bad');
+    box.textContent = info.ok ? (info.secure ? 'Secure · ' : 'Local · ') + info.msg : info.msg;
+  }
+
+  function applyServer(raw, persist) {
+    var info = inspectUrl(raw);
+    if (!info.ok) {
+      toast(info.msg);
+      $('serverUrl').value = state.server;
+      updateConnSecurity();
+      return false;
+    }
+    state.server = raw.trim().replace(/\/+$/, '');
+    $('serverUrl').value = state.server;
+    updateConnSecurity();
+    if (persist) saveConfig({ server: state.server });
+    return true;
+  }
+
   function setBackend(ok) {
     state.online = !!ok;
     var badge = $('netBadge');
     badge.classList.toggle('online', !!ok);
     badge.classList.toggle('offline', !ok);
     $('netText').textContent = ok ? 'online' : 'offline';
+    var info = inspectUrl(state.server);
     if (!ok) {
-      $('connHint').textContent = 'Backend offline. Termux me "cd ~/neo-ai/backend && ./run.sh" chalayein, phir token check karein.';
+      $('connHint').textContent = info.local
+        ? 'Backend offline. Termux me "cd ~/neo-ai/backend && ./run.sh" chalayein, phir token check karein.'
+        : 'Cloud backend reachable nahi ya token galat hai. URL, HTTPS aur NEO_TOKEN check karein.';
     } else {
-      $('connHint').textContent = 'Connected. API keys Termux ke .env me rehti hain, APK me kabhi nahi.';
+      $('connHint').textContent = 'Connected. AI provider keys sirf backend par hain — APK/WebView me kabhi nahi.';
     }
   }
 
@@ -965,10 +1012,26 @@
     });
 
     // conn
-    $('serverUrl').addEventListener('change', function () { saveConfig({ server: this.value }); });
-    $('token').addEventListener('change', function () { saveConfig({ token: this.value }); });
+    $('serverUrl').addEventListener('input', updateConnSecurity);
+    $('serverUrl').addEventListener('change', function () { applyServer(this.value, true); });
+    $('token').addEventListener('change', function () { saveConfig({ token: this.value.trim() }); });
+    $('presetLocal').addEventListener('click', function () {
+      applyServer('http://127.0.0.1:8787', true);
+      toast('Local Termux mode. Backend phone par chalna chahiye.');
+    });
+    $('presetCloud').addEventListener('click', function () {
+      if (/^https:\/\//i.test(state.server)) {
+        toast('Cloud mode already set.');
+        return;
+      }
+      $('serverUrl').value = 'https://';
+      $('serverUrl').focus();
+      updateConnSecurity();
+      toast('Apna HTTPS backend URL daalein (Render/Fly/VPS).');
+    });
     $('checkServer').addEventListener('click', function () {
-      saveConfig({ server: $('serverUrl').value, token: $('token').value });
+      if (!applyServer($('serverUrl').value, true)) return;
+      saveConfig({ token: $('token').value.trim() });
       call('checkServer');
       toast('Server check ho raha hai…');
     });

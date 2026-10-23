@@ -1,0 +1,24 @@
+services:
+  neo:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NEO_ENV: production
+      NEO_HOST: 0.0.0.0
+      NEO_REQUIRE_HTTPS: "1"
+      # Port is published on 127.0.0.1 only, so any peer is our local proxy.
+      NEO_FORWARDED_IPS: "*"
+    ports:
+      # Only the host's loopback — put Caddy/nginx in front for public HTTPS.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - neo-logs:/app/logs
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+volumes:
+  neo-logs:

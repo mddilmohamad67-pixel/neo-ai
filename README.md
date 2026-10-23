@@ -1,14 +1,22 @@
 # NEO AI — personal Android voice assistant
 
-NEO is a local-first assistant made of two parts:
+NEO is an assistant made of two parts:
 
 | Part | What it is | Where it runs |
 |---|---|---|
 | `android/` | Native Android app (Kotlin) + WebView 3D interface | Your phone |
-| `backend/` | FastAPI server (OpenAI brain, ElevenLabs voice, weather) | Termux on the same phone |
+| `backend/` | FastAPI server (OpenAI brain, ElevenLabs voice, weather) | Termux **or** any HTTPS host |
 
-No API key is inside the APK. The app talks to `127.0.0.1:8787` with a
-per-install token, and the token/keys stay in `backend/.env`.
+No AI provider key is ever inside the APK or the WebView. The app only stores a
+long random **device access token** (encrypted with Android Keystore) and sends
+it to your backend over HTTPS. OpenAI/ElevenLabs keys live in the server env.
+
+Two supported modes (switch in app ▸ Settings ▸ Connection):
+
+- **Local** — `http://127.0.0.1:8787`, backend in Termux, nothing leaves the phone
+  except the OpenAI/ElevenLabs calls made by the backend.
+- **Cloud** — `https://your-neo.example.com` (Docker on Render/Fly/VPS). HTTPS is
+  enforced; cleartext URLs are rejected for non-private hosts.
 
 **Highlights**
 
@@ -41,6 +49,8 @@ chmod +x run.sh && ./run.sh
 ```
 
 Full step-by-step: [`docs/SETUP.md`](docs/SETUP.md) ·
+**Cloud deploy: [`docs/DEPLOY.md`](docs/DEPLOY.md)** ·
+Build in Termux: [`docs/BUILD_TERMUX.md`](docs/BUILD_TERMUX.md) ·
 API: [`docs/API.md`](docs/API.md) ·
 Testing: [`docs/TESTING.md`](docs/TESTING.md) ·
 Limits: [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)
@@ -56,8 +66,9 @@ neo-ai/
 │       │                     NeoAccessibilityService, NeoForegroundService
 │       ├── assets/web/       index.html, style.css, app.js, three.min.js
 │       └── res/              theme, icon, accessibility config
-├── backend/                  main.py, requirements.txt, run.sh, .env.example
-└── docs/                     setup, api, testing, limitations
+├── backend/                  main.py, run.sh, requirements*.txt, .env.example,
+│                             Dockerfile, docker-compose.yml, fly.toml, render.yaml
+└── docs/                     setup, deploy, api, testing, limitations
 ```
 
 ## Honest status

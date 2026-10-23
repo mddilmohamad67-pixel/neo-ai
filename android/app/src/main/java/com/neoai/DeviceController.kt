@@ -252,7 +252,7 @@ class DeviceController(
         val intent = when {
             s.contains("wifi") -> Intent(Settings.ACTION_WIFI_SETTINGS)
             s.contains("bluetooth") -> Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-            s.contains("battery") -> Intent(Intent.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            s.contains("battery") -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
             s.contains("accessibility") -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             s.contains("app") -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
             s.contains("display") -> Intent(Settings.ACTION_DISPLAY_SETTINGS)
@@ -290,7 +290,7 @@ class DeviceController(
     private fun accessibilityAction(action: String, text: String): ActionResult {
         val service = NeoAccessibilityService.instance
             ?: return ActionResult(false, "Accessibility service ON nahi hai. Settings > Accessibility me NEO ko enable karein.")
-        if (!service.userEnabledAutomation) {
+        if (!NeoAccessibilityService.userEnabledAutomation) {
             return ActionResult(false, "Automation user ne OFF kiya hua hai. Main screen se ON karein.")
         }
         return when (action.lowercase()) {

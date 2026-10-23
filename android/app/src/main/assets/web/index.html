@@ -115,20 +115,27 @@
 
       <div class="panel-body">
         <section class="group">
-          <h3>Connection · Termux backend</h3>
+          <h3>Connection · Local or Cloud</h3>
+          <div class="row presets">
+            <button class="btn ghost" id="presetLocal" type="button">Local Termux</button>
+            <button class="btn ghost" id="presetCloud" type="button">Cloud (HTTPS)</button>
+          </div>
           <label class="field">
-            <span>Server URL</span>
-            <input id="serverUrl" type="url" placeholder="http://127.0.0.1:8787" />
+            <span>Backend URL</span>
+            <input id="serverUrl" type="url" inputmode="url" autocapitalize="off" spellcheck="false"
+                   placeholder="https://your-neo.onrender.com" />
           </label>
           <label class="field">
-            <span>Shared token</span>
-            <input id="token" type="text" spellcheck="false" />
+            <span>Device access token</span>
+            <input id="token" type="password" spellcheck="false" autocomplete="off"
+                   placeholder="Server ke NEO_TOKEN se match karna chahiye" />
           </label>
           <div class="row">
-            <button class="btn ghost" id="copyToken">Copy token</button>
-            <button class="btn" id="checkServer">Check server</button>
+            <button class="btn ghost" id="copyToken" type="button">Copy token</button>
+            <button class="btn" id="checkServer" type="button">Check server</button>
           </div>
-          <p class="hint" id="connHint">Token ko Termux ke <code>.env</code> me <code>NEO_TOKEN</code> par paste karein. API keys sirf Termux me rehti hain, APK me nahi.</p>
+          <p class="conn-lock" id="connSecurity">Checking connection mode…</p>
+          <p class="hint" id="connHint">OpenAI/ElevenLabs keys sirf backend par rehti hain — APK, WebView aur browser me kabhi nahi. Cloud ke liye <code>https://</code> zaroori hai.</p>
         </section>
 
         <section class="group">
@@ -208,7 +215,7 @@
         <button class="btn ghost" id="wizardLater">Later</button>
         <button class="btn" id="wizardDone">Start NEO</button>
       </div>
-      <p class="hint center">Backend: Termux me FastAPI chala kar Settings me token paste karein.</p>
+      <p class="hint center">Backend: local Termux ya apna HTTPS cloud host — Settings me URL + token daalein.</p>
     </div>
   </div>
 

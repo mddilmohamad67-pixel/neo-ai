@@ -8,6 +8,20 @@
 - **Last worked:** 2026-10-23
 
 ## Progress Log
+- 2026-10-23 (later): Added secure cloud mode. Backend hardened: public
+  `/health` + authed `/health/full`, Bearer/X-Neo-Token multi-device tokens,
+  HTTPS enforcement, HSTS/security headers, request ids, body cap, daily quota,
+  production token guard, no CORS. Added Dockerfile, compose, Fly/Render/Procfile/
+  Caddy deploy files and `docs/DEPLOY.md`. App: Cloud/Local presets, URL
+  validation (HTTPS required off-LAN) in JS + Kotlin, token field masked.
+  Fixed Kotlin compile errors (battery settings constant, accessibility smart
+  cast, companion access, TTS lambda returns). Built real debug APK on-device:
+  installed OpenJDK 17 + aapt2/apksigner, fake SDK at `~/android-sdk`
+  (platform 33 ext3 + build-tools 33.0.2 jars, aapt2 override), Gradle 8.1.1.
+  APK: `/storage/emulated/0/NeoAI.apk` (7 MB, v2 signed). Backend deps: Termux
+  python 3.14 needs pydantic 1.10.26 (pure python) → `requirements-termux.txt`,
+  run.sh auto-selects; cloud uses requirements.txt. Verified backend live:
+  auth 401, intents, weather, TTS 503 fallback, production 403 http / 200 https.
 - 2026-10-23: Built v1 from `neo.h` prompt + phone zip. Android project
   (minSdk 26, compileSdk 33) with WebView UI and procedural three.js avatar,
   VoiceController (SpeechRecognizer + TTS), DeviceController (apps/call/WhatsApp/
@@ -29,10 +43,11 @@
 - Backend AI optional: rule parser keeps device commands working without OpenAI.
 
 ## Next Steps
-- Build APK in AndroidIDE (SDK 33 + JDK 17) and run docs/TESTING.md matrix.
-- Fix any compile issues surfaced by the first Gradle sync.
-- Optional: swap avatar for a rigged GLB with blend shapes; add wake word via
-  Vosk/Porcupine; add app picker for contact ambiguity.
+- Install `/storage/emulated/0/NeoAI.apk` and run docs/TESTING.md matrix.
+- Put real OPENAI_API_KEY (and optional ElevenLabs voice) in backend `.env`.
+- Optional cloud: deploy per docs/DEPLOY.md, then Settings → Cloud (HTTPS).
+- Optional: rigged GLB avatar with blendshapes; Vosk/Porcupine wake word;
+  contact/app picker for ambiguous names.
 
 ## Open Questions
 - Which Android version/device will be the primary test target?

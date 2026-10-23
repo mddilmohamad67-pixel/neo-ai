@@ -22,15 +22,50 @@ class ApiClient(private val prefs: Prefs) {
 
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
-    private fun request(path: String): Request.Builder =
-        Request.Builder()
-            .url(prefs.serverUrl + path)
-            .header("X-Neo-Token", prefs.token)
-            .header("Accept", "application/json")
+    companion object {
+        private val PRIVATE_HOST = Regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2\\d|3[01])\\.)")
+        private val LOCAL_HOSTS = setOf("127.0.0.1", "localhost", "::1")
 
+        /**
+         * Cloud backends must be HTTPS: the access token and chat text travel over the wire.
+         * Cleartext is only tolerated for loopback/LAN development URLs.
+         */
+        fun safeBase(raw: String): String {
+            val base = raw.trim().trimEnd('/')
+            if (base.isEmpty()) throw BackendException("Server URL khali hai")
+            val uri = android.net.Uri.parse(base)
+            val scheme = uri.scheme?.lowercase()
+                ?: throw BackendException("URL me http:// ya https:// likhein")
+            val host = uri.host?.lowercase()
+                ?: throw BackendException("Server URL galat hai")
+            val local = host in LOCAL_HOSTS || host.endsWith(".local") ||
+                PRIVATE_HOST.containsMatchIn(host)
+            if (scheme != "https" && !local) {
+                throw BackendException(
+                    "Cloud backend ke liye https:// zaroori hai — warna token intercept ho sakta hai."
+                )
+            }
+            return base
+        }
+    }
+
+    private fun request(path: String): Request.Builder {
+        val base = safeBase(prefs.serverUrl)
+        val builder = Request.Builder()
+            .url(base + path)
+            .header("Accept", "application/json")
+        if (prefs.token.isNotBlank()) {
+            builder.header("Authorization", "Bearer ${prefs.token}")
+                .header("X-Neo-Token", prefs.token)
+        }
+        return builder
+    }
+
+    /** Authenticated capability probe; false also means "token rejected". */
     suspend fun health(): Boolean = withContext(Dispatchers.IO) {
         runCatching {
-            http.newCall(request("/health").get().build()).execute().use { it.isSuccessful }
+            if (prefs.token.isBlank()) return@runCatching false
+            http.newCall(request("/health/full").get().build()).execute().use { it.isSuccessful }
         }.getOrDefault(false)
     }
 

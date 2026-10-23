@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: neo-ai
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: NEO_ENV
+        value: production
+      - key: NEO_REQUIRE_HTTPS
+        value: "1"
+      - key: NEO_HOST
+        value: 0.0.0.0
+      - key: NEO_FORWARDED_IPS
+        value: "*"
+      - key: NEO_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false

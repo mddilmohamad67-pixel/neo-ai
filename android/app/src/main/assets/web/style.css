@@ -638,3 +638,18 @@ body.light .toast { background: rgba(255, 255, 255, 0.96); }
 @media (prefers-reduced-motion: reduce) {
   .blob, .orb, .mic .ring, .typing span, .badge .dot { animation: none !important; }
 }
+
+.presets .btn { flex: 1; }
+.conn-lock {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--muted);
+}
+.conn-lock.secure { color: #8ff5e6; border-color: rgba(0, 224, 198, 0.35); background: rgba(0, 224, 198, 0.07); }
+.conn-lock.local { color: #ffd79a; border-color: rgba(255, 190, 90, 0.35); background: rgba(255, 190, 90, 0.07); }
+.conn-lock.bad { color: var(--danger); border-color: rgba(255, 93, 122, 0.4); background: rgba(255, 93, 122, 0.07); }
+body.light .conn-lock { border-color: rgba(20, 20, 40, 0.12); }

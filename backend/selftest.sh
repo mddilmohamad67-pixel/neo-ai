@@ -23,7 +23,9 @@ hit() {
   echo
 }
 
-hit "health" "$BASE/health" -H "X-Neo-Token: $TOKEN"
+hit "health (public)" "$BASE/health"
+
+hit "health (authenticated)" "$BASE/health/full" -H "Authorization: Bearer $TOKEN"
 
 hit "intent: torch" -X POST "$BASE/chat" \
   -H "X-Neo-Token: $TOKEN" -H 'Content-Type: application/json' \

@@ -64,6 +64,22 @@ bugs. Anything listed here will be reported to the user instead of faked.
   restricts its use. This build is for the owner's own device, with explicit
   consent and visible indicator.
 
+## Cloud mode
+
+- **You host it.** There is no NEO-operated cloud; deploy the same backend to
+  Render/Fly/VPS (see `docs/DEPLOY.md`) and use your own provider keys.
+- **Shared-token auth, not accounts.** One long token (or a short `NEO_TOKENS`
+  list) identifies devices. There is no signup, OAuth, or per-user isolation.
+  Revoke by editing `NEO_TOKENS` and restarting.
+- **TLS is mandatory** for public hosts. The app rejects `http://` cloud URLs;
+  the server rejects cleartext when `NEO_REQUIRE_HTTPS=1` (default in production).
+- **The server sees your text.** Chat messages and transcripts are processed in
+  plaintext on the backend (that is what sends them to OpenAI). Audio and chat
+  history are not stored, only a rotating log line with the intent name.
+- **Free hosts cold-start.** Render free tier sleeps after idle; the first reply
+  can take ~30 s. Fly scale-to-zero behaves similarly.
+- **Not audited.** This is a personal project; do not use it for regulated data.
+
 ## Not included
 
 - Cloud sync/accounts, analytics, ads, telemetry — deliberately absent.

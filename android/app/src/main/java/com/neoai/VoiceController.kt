@@ -126,7 +126,7 @@ class VoiceController(private val context: Context) {
 
     /** Speak with the phone's built-in engine. Used when ElevenLabs is absent. */
     fun speakLocal(text: String, language: String) {
-        val task = {
+        val task: () -> Unit = {
             val engine = tts
             if (engine == null || !ttsReady) {
                 onSpeechEnd?.invoke(false)
@@ -159,11 +159,11 @@ class VoiceController(private val context: Context) {
                 tts?.setSpeechRate(0.98f)
                 tts?.setPitch(1.08f)
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) = onSpeechStart?.invoke()
-                    override fun onDone(utteranceId: String?) = onSpeechEnd?.invoke(true)
+                    override fun onStart(utteranceId: String?) { onSpeechStart?.invoke() }
+                    override fun onDone(utteranceId: String?) { onSpeechEnd?.invoke(true) }
                     @Deprecated("Deprecated in Java")
-                    override fun onError(utteranceId: String?) = onSpeechEnd?.invoke(false)
-                    override fun onError(utteranceId: String?, errorCode: Int) = onSpeechEnd?.invoke(false)
+                    override fun onError(utteranceId: String?) { onSpeechEnd?.invoke(false) }
+                    override fun onError(utteranceId: String?, errorCode: Int) { onSpeechEnd?.invoke(false) }
                 })
                 pendingSpeak?.invoke()
                 pendingSpeak = null

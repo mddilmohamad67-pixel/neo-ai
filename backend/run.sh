@@ -2,24 +2,36 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if ! command -v python >/dev/null 2>&1; then
+PY=""
+if command -v python3 >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
   echo "Python nahi mila. Termux me: pkg install python"
   exit 1
 fi
 
+# Android/Termux ships its own Python ABI: pure-Python deps only.
+REQ=requirements.txt
+if [ -n "${TERMUX_VERSION:-}" ] || [[ "${PREFIX:-}" == *com.termux* ]]; then
+  REQ=requirements-termux.txt
+fi
+
 if [ ! -d .venv ]; then
   echo "→ virtualenv bana raha hoon…"
-  python -m venv .venv
+  "$PY" -m venv .venv
 fi
 
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-if [ ! -f .venv/.deps_ok ] || [ requirements.txt -nt .venv/.deps_ok ]; then
-  echo "→ dependencies install/update…"
+STAMP=".venv/.deps_ok_${REQ}"
+if [ ! -f "$STAMP" ] || [ "$REQ" -nt "$STAMP" ] || [ requirements.txt -nt "$STAMP" ]; then
+  echo "→ dependencies install/update ($REQ)…"
   pip install --upgrade pip >/dev/null
-  pip install -r requirements.txt
-  touch .venv/.deps_ok
+  pip install -r "$REQ"
+  touch "$STAMP"
 fi
 
 if [ ! -f .env ]; then
@@ -31,4 +43,4 @@ fi
 
 echo "→ NEO backend start: http://127.0.0.1:${NEO_PORT:-8787}"
 echo "→ Token: .env ke NEO_TOKEN se match hona chahiye (ya backend/.neo_token)."
-exec python main.py
+exec "$PY" main.py

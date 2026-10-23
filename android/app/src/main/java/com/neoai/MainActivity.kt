@@ -163,9 +163,9 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 js("Neo.onState('idle')")
-                val offline = "Backend se connect nahi ho paya. Termux me NEO server chalayein, phir Settings me URL check karein."
+                val offline = "Backend se connect nahi ho paya. Settings me URL aur token check karein — local Termux ya apna HTTPS cloud host."
                 js("Neo.onAssistant(${JSONObject.quote(offline)})")
-                speak("Backend offline hai. Termux me server start karein.")
+                speak("Backend offline hai. Settings me connection check karein.")
             }
         }
     }
