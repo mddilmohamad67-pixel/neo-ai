@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: neo-ai
+    runtime: docker
+    plan: free
+    region: singapore
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NEO_ENV
+        value: production
+      - key: NEO_REQUIRE_HTTPS
+        value: "1"
+      - key: NEO_HOST
+        value: 0.0.0.0
+      - key: NEO_FORWARDED_IPS
+        value: "*"
+      - key: NEO_DAILY_REQUESTS
+        value: "400"
+      - key: NEO_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: OPENAI_MODEL
+        value: gemini-3.5-flash
+      - key: OPENAI_JSON_MODE
+        value: "0"
+      - key: OPENAI_REASONING
+        value: none
