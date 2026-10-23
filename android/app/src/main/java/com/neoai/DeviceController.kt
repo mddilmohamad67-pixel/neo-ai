@@ -208,7 +208,7 @@ class DeviceController(
                 )
                 if (auto) NeoAccessibilityService.scheduleWhatsAppSend()
                 val how = if (auto) {
-                    "chat khul gaya, message auto-send kar rahi hoon."
+                    "chat khul gaya; send button auto-tap karne ki koshish kar rahi hoon."
                 } else {
                     "ke liye WhatsApp draft khul gaya. Send aapko dabana hai."
                 }

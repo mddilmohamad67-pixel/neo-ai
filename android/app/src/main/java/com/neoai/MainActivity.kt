@@ -523,7 +523,10 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun sendText(text: String) {
-            runOnUiThread { runTurn(text, fromVoice = false) }
+            runOnUiThread {
+                if (awaitingConfirm != null) handleConfirmAnswer(text.trim())
+                else runTurn(text, fromVoice = false)
+            }
         }
 
         @JavascriptInterface
